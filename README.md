@@ -1,9 +1,9 @@
-##About
+## About
 :yum: :yum:
-##Usage
+## Usage
 
-###Build
-./gradlew jar
+### Build
+> ./gradlew jar
 
 ### Run
-java -jar build/libs/Net1.jar [multicastAddress]
+> java -jar build/libs/Net1.jar [multicastAddress]

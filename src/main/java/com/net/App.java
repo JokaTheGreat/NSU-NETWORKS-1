@@ -9,76 +9,93 @@ import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
 public class App {
-    private final int timeout = 3;
+    private static final int TIMEOUT = 3000;
+    private static final long SECOND_IN_MILLIS = 1000;
+    private static final String COPY_NAME_PREFIX = "App@";
+    private long lastMapUpdateTime;
     private final MulticastSocket multicastSocket;
-    private final String thisCopyName;
     private final DatagramPacket packet;
-    private HashMap<AbstractMap.SimpleEntry<String, String>, Integer> copiesMap;
+    private HashMap<AbstractMap.SimpleEntry<String, String>, Long> copiesMap;
 
-    App(String multicastAddress) throws IOException {
+    public App(InetAddress multicastAddress) throws IOException {
         multicastSocket = new MulticastSocket(8000);
-        multicastSocket.joinGroup(InetAddress.getByName(multicastAddress));
+        multicastSocket.joinGroup(multicastAddress);
 
-        thisCopyName = String.valueOf(Math.random());
+        lastMapUpdateTime = System.currentTimeMillis();
+        String thisCopyName = COPY_NAME_PREFIX + String.valueOf(Math.random());
         packet = new DatagramPacket(
                 thisCopyName.getBytes(),
                 thisCopyName.getBytes().length,
-                InetAddress.getByName(multicastAddress),
+                multicastAddress,
                 8000
         );
 
         copiesMap = new HashMap<>();
     }
 
-    void multiReceive() throws IOException {
+    public void multiReceive() throws IOException {
         var receivedPacket = new DatagramPacket(new byte[400], 400);
         while(true) {
             multicastSocket.receive(receivedPacket);
-            packetParser(receivedPacket);
+            parsePacket(receivedPacket);
         }
     }
 
-    void packetParser(DatagramPacket receivedPacket) {
+    private void parsePacket(DatagramPacket receivedPacket) {
         String copyName = new String(receivedPacket.getData(), 0, receivedPacket.getLength());
-        var copyParametres = new AbstractMap.SimpleEntry<>(copyName, receivedPacket.getAddress().getHostAddress());
-
-        if(!copiesMap.containsKey(copyParametres)) {
-            copiesMap.put(copyParametres, 0);
-
-            System.out.println(copiesMap.size() + " copies are active:");
-            copiesMap.forEach((pairKey, value) -> {
-                System.out.println(pairKey.getValue());
-            });
-            System.out.println("");
+        if (!copyName.contains(COPY_NAME_PREFIX)) {
+            return;
         }
-        else {
-            copiesMap.replace(copyParametres, 0);
+        var copyParameters = new AbstractMap.SimpleEntry<>(copyName, receivedPacket.getAddress().getHostAddress());
+
+        updateMap(copyParameters);
+    }
+
+    private void updateMap(AbstractMap.SimpleEntry<String, String> copyParameters) {
+        if (isNewEntry(copiesMap.put(copyParameters, (long)0))) {
+            printListOfIP();
         }
 
-        if(thisCopyName.equals(copyParametres.getKey())) {
-            copiesMap.replaceAll((key, value) -> value + 1);
+        if(System.currentTimeMillis() - lastMapUpdateTime > SECOND_IN_MILLIS) {
+            lastMapUpdateTime += SECOND_IN_MILLIS;
+            copiesMap.replaceAll((key, value) -> value + SECOND_IN_MILLIS);
 
-            if(copiesMap.values().remove(timeout)) {
-                System.out.println(copiesMap.size() + " copies are active:");
-                copiesMap.forEach((pairKey, value) -> {
-                    System.out.println(pairKey.getValue());
-                });
-                System.out.println("");
+            if(deleteByTimeout()) {
+                printListOfIP();
             }
         }
     }
 
-    void multiSend() {
-        try {
-            while(true) {
-                multicastSocket.send(packet);
-                TimeUnit.SECONDS.sleep(1);
+    private boolean isNewEntry(Object insertedValue) {
+        return null == insertedValue;
+    }
+
+    private boolean deleteByTimeout() {
+        return copiesMap.entrySet().removeIf(entry -> entry.getValue() > TIMEOUT);
+    }
+
+    private void printListOfIP() {
+        System.out.println(copiesMap.size() + " copies are active:");
+        copiesMap.forEach((pairKey, value) -> {
+            System.out.println(pairKey.getValue());
+        });
+        System.out.println("");
+    }
+
+    public void multiSend() {
+        Runnable support = () -> {
+            try {
+                while (true) {
+                    multicastSocket.send(packet);
+                    TimeUnit.MILLISECONDS.sleep(1000);
+                }
+            } catch (InterruptedException ignored) {
+            } catch (IOException e) {
+                System.err.println("Error sending to socket");
             }
-        }
-        catch (InterruptedException ignored) { }
-        catch (IOException e) {
-            System.err.println("Error sending to socket");
-            System.exit(-1);
-        }
+        };
+
+        Thread supportThread = new Thread(support);
+        supportThread.start();
     }
 }

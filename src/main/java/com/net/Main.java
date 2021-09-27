@@ -14,7 +14,7 @@ public class Main {
                 System.exit(-1);
             }
         }
-        com.net.App app = new com.net.App(address);
+        App app = new App(address);
 
         app.multiSend();
         app.multiReceive();

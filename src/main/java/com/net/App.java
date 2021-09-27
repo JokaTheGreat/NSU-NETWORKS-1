@@ -52,7 +52,8 @@ public class App {
     }
 
     private void updateMap(AbstractMap.SimpleEntry<String, String> copyParameters) {
-        if (isNewEntry(copiesMap.put(copyParameters, (long)0))) {
+        boolean isNewEntry = (null == copiesMap.put(copyParameters, (long)0));
+        if (isNewEntry) {
             printListOfIP();
         }
 
@@ -64,10 +65,6 @@ public class App {
                 printListOfIP();
             }
         }
-    }
-
-    private boolean isNewEntry(Object insertedValue) {
-        return null == insertedValue;
     }
 
     private boolean deleteByTimeout() {
